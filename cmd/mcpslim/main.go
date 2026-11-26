@@ -48,16 +48,16 @@ func main() {
 
 func run(args []string, stdout, stderr *os.File) int {
 	if len(args) == 0 {
-		fmt.Fprint(stderr, usage)
+		_, _ = fmt.Fprint(stderr, usage)
 		return 2
 	}
 	switch args[0] {
 	case "version", "--version", "-v":
-		fmt.Fprintf(stdout, "mcpslim %s (commit %s, built %s, %s/%s, %s)\n",
+		_, _ = fmt.Fprintf(stdout, "mcpslim %s (commit %s, built %s, %s/%s, %s)\n",
 			version, commit, date, runtime.GOOS, runtime.GOARCH, runtime.Version())
 		return 0
 	case "help", "--help", "-h":
-		fmt.Fprint(stdout, usage)
+		_, _ = fmt.Fprint(stdout, usage)
 		return 0
 	case "serve":
 		return cmdServe(args[1:], stderr)
@@ -68,7 +68,7 @@ func run(args []string, stdout, stderr *os.File) int {
 	case "approve":
 		return cmdApprove(args[1:], stdout, stderr)
 	default:
-		fmt.Fprintf(stderr, "mcpslim: unknown command %q\n\n%s", args[0], usage)
+		_, _ = fmt.Fprintf(stderr, "mcpslim: unknown command %q\n\n%s", args[0], usage)
 		return 2
 	}
 }
@@ -105,7 +105,7 @@ func cmdServe(args []string, stderr *os.File) int {
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
-		fmt.Fprintf(stderr, "mcpslim: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "mcpslim: %v\n", err)
 		return 1
 	}
 	if len(servers) > 0 {
@@ -124,7 +124,7 @@ func cmdServe(args []string, stderr *os.File) int {
 		cfg.Router.TopK = *topK
 	}
 	if len(cfg.Servers) == 0 {
-		fmt.Fprintf(stderr, "mcpslim: no servers configured; pass --server name=command or edit %s\n", *cfgPath)
+		_, _ = fmt.Fprintf(stderr, "mcpslim: no servers configured; pass --server name=command or edit %s\n", *cfgPath)
 		return 1
 	}
 
@@ -137,7 +137,7 @@ func cmdServe(args []string, stderr *os.File) int {
 		Out:     os.Stdout,
 		Log:     stderr,
 	}); err != nil {
-		fmt.Fprintf(stderr, "mcpslim: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "mcpslim: %v\n", err)
 		return 1
 	}
 	return 0
@@ -155,7 +155,7 @@ func cmdWrap(args []string, stderr *os.File) int {
 	}
 	argv := fs.Args()
 	if len(argv) == 0 {
-		fmt.Fprintln(stderr, "usage: mcpslim wrap [flags] -- <command> [args...]")
+		_, _ = fmt.Fprintln(stderr, "usage: mcpslim wrap [flags] -- <command> [args...]")
 		return 2
 	}
 
@@ -179,7 +179,7 @@ func cmdWrap(args []string, stderr *os.File) int {
 		Out:     os.Stdout,
 		Log:     stderr,
 	}); err != nil {
-		fmt.Fprintf(stderr, "mcpslim: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "mcpslim: %v\n", err)
 		return 1
 	}
 	return 0
@@ -204,35 +204,35 @@ func cmdInit(args []string, stdout, stderr *os.File) int {
 
 	cands, err := config.Discover(*home, *cwd)
 	if err != nil {
-		fmt.Fprintf(stderr, "mcpslim: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "mcpslim: %v\n", err)
 		return 1
 	}
 	if len(cands) == 0 {
-		fmt.Fprintf(stdout, "No MCP client configs found under %s or %s.\n", *home, *cwd)
+		_, _ = fmt.Fprintf(stdout, "No MCP client configs found under %s or %s.\n", *home, *cwd)
 		return 0
 	}
 	total := 0
 	for _, c := range cands {
-		fmt.Fprintf(stdout, "%s (%s): %d server(s)", c.Path, c.Kind, len(c.Servers))
+		_, _ = fmt.Fprintf(stdout, "%s (%s): %d server(s)", c.Path, c.Kind, len(c.Servers))
 		if len(c.Skipped) > 0 {
-			fmt.Fprintf(stdout, ", skipped non-stdio: %s", strings.Join(c.Skipped, ", "))
+			_, _ = fmt.Fprintf(stdout, ", skipped non-stdio: %s", strings.Join(c.Skipped, ", "))
 		}
-		fmt.Fprintln(stdout)
+		_, _ = fmt.Fprintln(stdout)
 		total += len(c.Servers)
 	}
 	if !*write {
-		fmt.Fprintln(stdout, "\nDry run. Re-run with --write to back up and rewrite these files.")
+		_, _ = fmt.Fprintln(stdout, "\nDry run. Re-run with --write to back up and rewrite these files.")
 		return 0
 	}
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
-		fmt.Fprintf(stderr, "mcpslim: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "mcpslim: %v\n", err)
 		return 1
 	}
 	config.Merge(cfg, cands)
 	if err := cfg.Save(*cfgPath); err != nil {
-		fmt.Fprintf(stderr, "mcpslim: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "mcpslim: %v\n", err)
 		return 1
 	}
 	command, err := os.Executable()
@@ -243,12 +243,12 @@ func cmdInit(args []string, stdout, stderr *os.File) int {
 	for _, c := range cands {
 		backup, err := config.Apply(c, command, *cfgPath)
 		if err != nil {
-			fmt.Fprintf(stderr, "mcpslim: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "mcpslim: %v\n", err)
 			return 1
 		}
-		fmt.Fprintf(stdout, "Rewrote %s (backup: %s)\n", c.Path, backup)
+		_, _ = fmt.Fprintf(stdout, "Rewrote %s (backup: %s)\n", c.Path, backup)
 	}
-	fmt.Fprintf(stdout, "Wrote %s with %d server(s). Restart your MCP client.\n", *cfgPath, total)
+	_, _ = fmt.Fprintf(stdout, "Wrote %s with %d server(s). Restart your MCP client.\n", *cfgPath, total)
 	return 0
 }
 
@@ -266,25 +266,25 @@ func cmdApprove(args []string, stdout, stderr *os.File) int {
 	if path == "" {
 		cfg, err := config.Load(*cfgPath)
 		if err != nil {
-			fmt.Fprintf(stderr, "mcpslim: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "mcpslim: %v\n", err)
 			return 1
 		}
 		path = cfg.LockPath()
 	}
 	lock, err := lockfile.Load(path)
 	if err != nil {
-		fmt.Fprintf(stderr, "mcpslim: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "mcpslim: %v\n", err)
 		return 1
 	}
 	n := lock.Approve(*server, *tool)
 	if n == 0 {
-		fmt.Fprintln(stdout, "No pending schema changes.")
+		_, _ = fmt.Fprintln(stdout, "No pending schema changes.")
 		return 0
 	}
 	if err := lock.Save(); err != nil {
-		fmt.Fprintf(stderr, "mcpslim: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "mcpslim: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "Approved %d schema change(s) in %s\n", n, path)
+	_, _ = fmt.Fprintf(stdout, "Approved %d schema change(s) in %s\n", n, path)
 	return 0
 }

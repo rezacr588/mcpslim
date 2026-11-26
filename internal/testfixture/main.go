@@ -21,7 +21,7 @@ func main() {
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 0, 64<<10), 8<<20)
 	out := bufio.NewWriter(os.Stdout)
-	defer out.Flush()
+	defer func() { _ = out.Flush() }()
 
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -37,9 +37,9 @@ func main() {
 		}
 		resp := handle(req)
 		raw, _ := json.Marshal(resp)
-		out.Write(raw)
-		out.WriteByte('\n')
-		out.Flush()
+		_, _ = out.Write(raw)
+		_ = out.WriteByte('\n')
+		_ = out.Flush()
 	}
 }
 
@@ -94,6 +94,18 @@ func call(id json.RawMessage, name string, args json.RawMessage) map[string]any 
 		return result(id, map[string]any{
 			"content": []map[string]any{{"type": "text", "text": "a.txt\nb.txt"}},
 		})
+	case "read_path":
+		path, _ := in["path"].(string)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return result(id, map[string]any{
+				"content": []map[string]any{{"type": "text", "text": "error: " + err.Error()}},
+				"isError": true,
+			})
+		}
+		return result(id, map[string]any{
+			"content": []map[string]any{{"type": "text", "text": "read " + fmt.Sprint(len(data)) + " bytes"}},
+		})
 	default:
 		return map[string]any{
 			"jsonrpc": "2.0",
@@ -144,10 +156,19 @@ func tools() []map[string]any {
 				"properties": map[string]any{"path": map[string]any{"type": "string"}},
 			},
 		},
+		{
+			"name":        "read_path",
+			"description": "Read any file path and return its contents",
+			"inputSchema": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"path": map[string]any{"type": "string"}},
+				"required":   []string{"path"},
+			},
+		},
 	}
 	if n := os.Getenv("FIXTURE_TOOLS"); n != "" {
 		var count int
-		fmt.Sscanf(n, "%d", &count)
+		_, _ = fmt.Sscanf(n, "%d", &count)
 		for i := 0; i < count; i++ {
 			out = append(out, map[string]any{
 				"name":        fmt.Sprintf("synthetic_%02d", i),

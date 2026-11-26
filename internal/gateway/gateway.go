@@ -90,7 +90,7 @@ func Serve(ctx context.Context, opts Options) error {
 	defer g.close()
 
 	if err := g.saveLock(); err != nil {
-		fmt.Fprintf(g.log, "mcpslim: warning: could not write %s: %v\n", opts.Config.LockPath(), err)
+		_, _ = fmt.Fprintf(g.log, "mcpslim: warning: could not write %s: %v\n", opts.Config.LockPath(), err)
 	}
 	return g.loop(ctx, opts.In)
 }
@@ -116,7 +116,7 @@ func (g *Gateway) startServer(ctx context.Context, name string, sc config.Server
 		DenyNetwork: g.cfg.Sandbox.DenyNetwork,
 	})
 	if note != "" {
-		fmt.Fprintf(g.log, "mcpslim: %s: %s\n", name, note)
+		_, _ = fmt.Fprintf(g.log, "mcpslim: %s: %s\n", name, note)
 	}
 
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
@@ -143,7 +143,7 @@ func (g *Gateway) startServer(ctx context.Context, name string, sc config.Server
 	conn.SetNotificationHandler(func(msg *mcp.Message) {
 		if msg.Method == "notifications/tools/list_changed" {
 			if err := g.refresh(ctx, up); err != nil {
-				fmt.Fprintf(g.log, "mcpslim: %s: refresh failed: %v\n", name, err)
+				_, _ = fmt.Fprintf(g.log, "mcpslim: %s: refresh failed: %v\n", name, err)
 			}
 		}
 	})
@@ -166,13 +166,13 @@ func (g *Gateway) startServer(ctx context.Context, name string, sc config.Server
 	}
 	if changed {
 		if err := g.saveLock(); err != nil {
-			fmt.Fprintf(g.log, "mcpslim: warning: could not write lockfile: %v\n", err)
+			_, _ = fmt.Fprintf(g.log, "mcpslim: warning: could not write lockfile: %v\n", err)
 		}
 	}
 	up.setTools(tools)
 	for _, d := range drift {
 		up.block(d.Tool, "definition changed; run mcpslim approve "+d.Server+" "+d.Tool)
-		fmt.Fprintf(g.log, "mcpslim: %s/%s schema changed and is blocked until approved\n", d.Server, d.Tool)
+		_, _ = fmt.Fprintf(g.log, "mcpslim: %s/%s schema changed and is blocked until approved\n", d.Server, d.Tool)
 	}
 	g.servers = append(g.servers, up)
 	return nil
@@ -336,11 +336,11 @@ func (g *Gateway) search(req *mcp.Message) *mcp.Message {
 
 	var b strings.Builder
 	if len(infos) == 0 {
-		fmt.Fprintf(&b, "No tools matched %q. Try a broader capability description.", args.Query)
+		_, _ = fmt.Fprintf(&b, "No tools matched %q. Try a broader capability description.", args.Query)
 	} else {
-		fmt.Fprintf(&b, "Found %d tool(s) for %q:\n", len(infos), args.Query)
+		_, _ = fmt.Fprintf(&b, "Found %d tool(s) for %q:\n", len(infos), args.Query)
 		for _, info := range infos {
-			fmt.Fprintf(&b, "- %s (%s): %s\n", info.exposed, info.server, truncate(info.desc, 180))
+			_, _ = fmt.Fprintf(&b, "- %s (%s): %s\n", info.exposed, info.server, truncate(info.desc, 180))
 		}
 		b.WriteString("These tools are now available in tools/list and can be called directly.")
 	}
@@ -405,13 +405,13 @@ func (g *Gateway) refresh(ctx context.Context, up *upstream) error {
 	}
 	if changed {
 		if err := g.saveLock(); err != nil {
-			fmt.Fprintf(g.log, "mcpslim: warning: could not write lockfile: %v\n", err)
+			_, _ = fmt.Fprintf(g.log, "mcpslim: warning: could not write lockfile: %v\n", err)
 		}
 	}
 	up.setTools(tools)
 	for _, d := range drift {
 		up.block(d.Tool, "definition changed; run mcpslim approve "+d.Server+" "+d.Tool)
-		fmt.Fprintf(g.log, "mcpslim: %s/%s schema changed and is blocked until approved\n", d.Server, d.Tool)
+		_, _ = fmt.Fprintf(g.log, "mcpslim: %s/%s schema changed and is blocked until approved\n", d.Server, d.Tool)
 	}
 	g.rebuildIndex()
 	if msg, err := mcp.NewNotification("notifications/tools/list_changed", nil); err == nil {

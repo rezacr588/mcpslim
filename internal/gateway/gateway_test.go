@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -135,7 +136,8 @@ func startGateway(t *testing.T, cfg *config.Config) (*testClient, func()) {
 		cancel()
 		_ = inW.Close()
 		select {
-		case <-errCh:
+		case err := <-errCh:
+			_ = err
 		case <-time.After(5 * time.Second):
 			t.Error("gateway did not stop")
 		}
@@ -368,6 +370,43 @@ func TestSchemaTokenReduction(t *testing.T) {
 	t.Logf("upstream=%d bytes exposed=%d bytes reduction=%.1f%% (%d tools)", len(baseline), len(exposed), reduction, len(upstreamTools))
 	if reduction < 60 {
 		t.Fatalf("reduction %.1f%% below the 60%% floor", reduction)
+	}
+}
+
+func TestSandboxDeniesEnvEndToEnd(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Seatbelt is macOS only")
+	}
+	if _, err := os.Stat("/usr/bin/sandbox-exec"); err != nil {
+		t.Skip("sandbox-exec not available")
+	}
+	work := t.TempDir()
+	if err := os.WriteFile(filepath.Join(work, ".env"), []byte("SECRET=1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(work, "ok.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.New()
+	cfg.Servers = map[string]config.Server{"fixture": {Command: fixtureBin, Dir: work}}
+	cfg.Lockfile = filepath.Join(t.TempDir(), "mcpslim.lock")
+	tc, stop := startGateway(t, cfg)
+	defer stop()
+	initialize(t, tc)
+	search(t, tc, "read any file path")
+
+	if resp, out := call(t, tc, "read_path", map[string]any{"path": "ok.txt"}); resp.Error != nil {
+		t.Fatalf("allowed read failed: %v", resp.Error)
+	} else if len(out.Content) == 0 || !strings.Contains(out.Content[0].Text, "read 5 bytes") {
+		t.Fatalf("allowed read = %+v", out)
+	}
+
+	resp, out := call(t, tc, "read_path", map[string]any{"path": ".env"})
+	if resp.Error != nil {
+		t.Fatalf("call error: %v", resp.Error)
+	}
+	if len(out.Content) == 0 || !strings.Contains(out.Content[0].Text, "operation not permitted") {
+		t.Fatalf("sandbox did not deny .env: %+v", out)
 	}
 }
 
