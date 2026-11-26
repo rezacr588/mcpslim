@@ -1,0 +1,15 @@
+# Binaries
+/mcpslim
+/dist/
+*.exe
+
+# Go
+*.test
+*.out
+vendor/
+
+# Tooling
+.DS_Store
+.idea/
+.vscode/
+*.swp
