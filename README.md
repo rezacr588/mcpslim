@@ -149,8 +149,8 @@ make lint        # go vet (golangci-lint in CI)
 The test suite includes a real Seatbelt enforcement test on macOS and a
 schema-drift test that runs the gateway twice against a mutated server.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and
-[docs/roadmap.md](docs/roadmap.md).
+See [NEXT-ACTIONS.md](docs/NEXT-ACTIONS.md), [CONTRIBUTING.md](CONTRIBUTING.md),
+[SECURITY.md](SECURITY.md) and [docs/roadmap.md](docs/roadmap.md).
 
 ## License
 
