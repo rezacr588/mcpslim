@@ -1,69 +1,156 @@
 # mcpslim
 
-A zero-CGO, single-binary Go gateway that sits between AI coding clients
-(Claude Code, OpenCode, Gemini CLI, Cursor) and local Model Context Protocol
-servers. It attacks two problems at once:
+[![CI](https://github.com/rezacr588/mcpslim/actions/workflows/ci.yml/badge.svg)](https://github.com/rezacr588/mcpslim/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/rezacr588/mcpslim.svg)](https://pkg.go.dev/github.com/rezacr588/mcpslim)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)](#status)
 
-- **Schema bloat** — index every upstream tool and expose one `search_tools`
-  meta-tool, hydrating only the schemas the agent actually asks for.
-- **Host privilege** — wrap `npx`/`uvx`/binary stdio servers in least-privilege
-  OS sandboxes (macOS Seatbelt, Linux Landlock/bubblewrap) that deny reads of
-  `~/.ssh`, `~/.aws`, `~/.gnupg` and `.env` by default.
+A single Go binary that sits between your AI coding client and your local MCP
+servers. It loads tool schemas on demand and sandboxes the servers it spawns.
 
-It also pins each tool's name, description and JSON schema in `mcpslim.lock` so
-a server cannot silently redefine a tool between runs.
+- **Less context, same tools.** One `search_tools` meta-tool replaces every
+  upstream schema; matched tools are hydrated mid-session.
+- **No host-wide trust.** Upstream `npx`/`uvx`/binary servers run under macOS
+  Seatbelt or Linux bubblewrap, with `~/.ssh`, `~/.aws`, `~/.gnupg` and
+  workspace `.env` files denied.
+- **No silent tool changes.** `mcpslim.lock` pins each tool's name,
+  description and JSON schema by hash; a changed definition is blocked until
+  you run `mcpslim approve`.
 
-Status: **scaffold** (v0.0.0). No gateway behaviour yet — see
-[`docs/roadmap.md`](docs/roadmap.md).
+No CGO, no runtime dependencies, one binary.
 
-## Why
+## Status
 
-An MCP-heavy session pays for every tool schema on every request, and a local
-stdio server runs with the developer's full user permissions. mcpslim keeps the
-schemas out of the prompt until they are needed, and keeps the process out of
-anything it was not granted.
-
-## Architecture
-
-```
-client (Claude Code / OpenCode / Gemini CLI / Cursor)
-   │  stdio, MCP JSON-RPC
-   ▼
-mcpslim
-   ├── router     BM25 index over tool name/description/schema → search_tools
-   ├── lockfile   SHA-256 schema pinning + drift approval
-   ├── sandbox    Seatbelt (.sb) / Landlock / bwrap profile generation
-   └── config     client config discovery, backup and rewrite
-        │
-        ▼
-   upstream stdio/HTTP MCP servers (sandboxed)
-```
+Alpha (`v0.1.x`). The gateway, BM25 routing, schema pinning and sandbox are
+implemented and tested. Not yet implemented: resources, prompts, sampling,
+OAuth, and a default-deny sandbox profile (see [Limitations](#limitations)).
 
 ## Install
 
-Not released yet. When v0.1.0 ships:
-
 ```bash
-brew install rzeraat/tap/mcpslim
-# or
-go install github.com/rzeraat/mcpslim/cmd/mcpslim@latest
+go install github.com/rezacr588/mcpslim/cmd/mcpslim@latest
 ```
 
-## Build from source
+Homebrew and prebuilt binaries arrive with the first tagged release; the
+Homebrew tap follows once `rezacr588/homebrew-tap` exists.
+
+## Quick start
+
+Wrap one server without touching any config:
 
 ```bash
-go build ./...
-go test ./...
-go run ./cmd/mcpslim version
+mcpslim wrap -- npx -y @modelcontextprotocol/server-filesystem .
 ```
 
-## Documentation
+Use that whole command wherever your client expects an MCP server command.
+For several servers, write a config and run `mcpslim serve`:
 
-- [`docs/mcpslim-growth-plan.pdf`](docs/mcpslim-growth-plan.pdf) — business and
-  open-source growth plan (source of scope and KPIs)
-- [`docs/roadmap.md`](docs/roadmap.md) — six-week build and launch sprint
-- [`docs/claims.md`](docs/claims.md) — claims that must be backed by a
-  reproducible benchmark before they appear in a launch post
+```json
+{
+  "servers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_TOKEN": "..." }
+    }
+  },
+  "router": { "topK": 5 },
+  "sandbox": { "denyNetwork": false }
+}
+```
+
+```bash
+mcpslim serve --config ~/.config/mcpslim/config.json
+```
+
+`mcpslim init` finds existing Claude, Cursor and Gemini configs, backs them up,
+and rewrites them to route through mcpslim:
+
+```bash
+mcpslim init            # dry run
+mcpslim init --write
+```
+
+## How it works
+
+```
+client (Claude Code, OpenCode, Gemini CLI, Cursor)
+   │  MCP over stdio
+   ▼
+mcpslim
+   ├── router    BM25 over tool name, description and schema → search_tools
+   ├── lockfile  canonical SHA-256 pinning, drift blocking, approve
+   ├── sandbox   Seatbelt profile / bubblewrap wrapper
+   └── gateway   one session, N upstream servers, collision-safe names
+        │
+        ▼
+   sandboxed stdio servers
+```
+
+The client starts with one tool:
+
+```
+search_tools({"query": "read a file"})
+→ Found 1 tool(s) for "read a file":
+  - read_file (filesystem): Read the contents of a file from disk
+```
+
+mcpslim then sends `notifications/tools/list_changed`; the next `tools/list`
+contains `read_file` with its real schema, and calls route to the owning
+server.
+
+### Measured effect
+
+`TestSchemaTokenReduction` runs 29 synthetic tools with realistic schemas:
+12,641 bytes of upstream tool JSON become 439 bytes initially — a 96.5%
+reduction. The saving depends on how many tools you have; a handful of tiny
+tools saves little, because `search_tools` itself costs about 110 tokens.
+
+### Commands
+
+| Command | Purpose |
+| --- | --- |
+| `mcpslim wrap -- <cmd>` | Proxy one server, no config changes |
+| `mcpslim serve` | Serve every configured upstream |
+| `mcpslim init [--write]` | Discover and rewrite client configs |
+| `mcpslim approve` | Accept a pinned schema change |
+| `mcpslim version` | Build information |
+
+### Flags
+
+`serve` and `wrap` accept `--no-sandbox`, `--deny-network`, `--top-k`,
+`--lock`. `serve` also accepts repeatable `--server name=command`.
+
+## Limitations
+
+- **Deny-list sandbox, not default-deny.** Credential paths and `.env` are
+  denied; everything else is allowed. A default-deny profile is on the roadmap.
+- **Network is allowed by default** because `npx`/`uvx` must fetch packages on
+  first run. `--deny-network` closes it.
+- **Linux sandboxing needs `bwrap`** and unprivileged user namespaces. Without
+  them mcpslim logs a warning and runs the server unsandboxed.
+- **`list_changed` support varies by client.** Clients that ignore it will not
+  see hydrated tools; keep `--top-k` small in that case.
+- **Tools-only.** Resources, prompts and sampling are not proxied.
+
+## Development
+
+```bash
+make test        # unit + integration tests
+make race        # race detector
+make build       # ./mcpslim
+make lint        # go vet (golangci-lint in CI)
+```
+
+The test suite includes a real Seatbelt enforcement test on macOS and a
+schema-drift test that runs the gateway twice against a mutated server.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and
+[docs/roadmap.md](docs/roadmap.md).
 
 ## License
 

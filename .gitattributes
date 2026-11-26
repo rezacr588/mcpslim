@@ -1,0 +1,14 @@
+* text=auto eol=lf
+
+*.go text
+go.mod text
+go.sum text
+Makefile text
+*.yml text
+*.yaml text
+*.md text
+
+*.pdf binary
+*.png binary
+*.gif binary
+*.zip binary

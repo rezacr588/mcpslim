@@ -1,0 +1,62 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For security issues, use SECURITY.md instead of this form.
+  - type: input
+    id: version
+    attributes:
+      label: mcpslim version
+      description: Output of `mcpslim version`
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Linux (x86_64)
+        - Linux (arm64)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options:
+        - Claude Code
+        - OpenCode
+        - Gemini CLI
+        - Cursor
+        - Other
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include the exact command and the upstream server you wrapped.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: stderr from mcpslim, with secrets removed.
+      render: text
+  - type: textarea
+    id: config
+    attributes:
+      label: Config
+      description: The relevant part of mcpslim config, with secrets removed.
+      render: json

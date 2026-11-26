@@ -1,0 +1,63 @@
+version: 2
+
+project_name: mcpslim
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: mcpslim
+    main: ./cmd/mcpslim
+    binary: mcpslim
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .Date }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore"
+
+release:
+  draft: false
+  prerelease: auto
+
+# Homebrew is enabled once rezacr588/homebrew-tap exists and the
+# HOMEBREW_TAP_GITHUB_TOKEN secret is set on this repository.
+# brews:
+#   - repository:
+#       owner: rezacr588
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+#     directory: Formula
+#     homepage: https://github.com/rezacr588/mcpslim
+#     description: MCP gateway with dynamic tool loading and OS sandboxing
+#     license: MIT
+#     install: |
+#       bin.install "mcpslim"
